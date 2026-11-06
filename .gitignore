@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+*.user
+publish/
+artifacts/
+backup/
+*.db
+*.db-shm
+*.db-wal

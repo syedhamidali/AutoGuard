@@ -1,0 +1,9 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><RootNamespace>AutoPortal.Guardian.Windows</RootNamespace></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Win32.SystemEvents" Version="8.0.0" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.1" />
+    <ProjectReference Include="..\core\AutoPortal.Guardian.Core.csproj" />
+    <ProjectReference Include="..\analysis\AutoPortal.Guardian.Analysis.csproj" />
+  </ItemGroup>
+</Project>

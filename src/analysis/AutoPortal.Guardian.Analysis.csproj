@@ -1,0 +1,4 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework><RootNamespace>AutoPortal.Guardian.Analysis</RootNamespace></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\core\AutoPortal.Guardian.Core.csproj" /></ItemGroup>
+</Project>

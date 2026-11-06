@@ -26,8 +26,12 @@ static class Repo
 
     public static (int code, string output) Ps(string args)
     {
-        using var p = Process.Start(new ProcessStartInfo("powershell.exe", "-NoProfile -ExecutionPolicy Bypass " + args)
-        { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true })!;
+        var psi = new ProcessStartInfo("powershell.exe", "-NoProfile -ExecutionPolicy Bypass " + args)
+        { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
+        // When the test host is started from PowerShell 7 (as on CI), its PSModulePath points at modules Windows PowerShell 5.1
+        // cannot load, so built-in cmdlets like Get-FileHash disappear. Let the child use its own default module path.
+        psi.Environment.Remove("PSModulePath");
+        using var p = Process.Start(psi)!;
         var o = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
         p.WaitForExit(); return (p.ExitCode, o);
     }

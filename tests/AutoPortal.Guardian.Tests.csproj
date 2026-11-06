@@ -7,6 +7,8 @@
     <ProjectReference Include="..\src\core\AutoPortal.Guardian.Core.csproj" />
     <ProjectReference Include="..\src\analysis\AutoPortal.Guardian.Analysis.csproj" />
     <ProjectReference Include="..\src\windows\AutoPortal.Guardian.Windows.csproj" />
+    <ProjectReference Include="..\src\connectivity\Core\AutoPortal.Connectivity.Core.csproj" />
     <ProjectReference Include="..\src\hardware\AutoPortal.Guardian.Hardware.csproj" />
   </ItemGroup>
 </Project>
+

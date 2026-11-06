@@ -13,11 +13,12 @@ jobs:
         with: { dotnet-version: 8.0.x }
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
-      - name: Build, test, package, checksum
+      - name: Test, package both modules, build installers, checksum, verify
         shell: pwsh
         run: |
           $env:Path += ";${env:ProgramFiles(x86)}\Inno Setup 6"
-          ./scripts/build.ps1 -Version "${{ github.ref_name }}".TrimStart('v')
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          ./scripts/build.ps1 -Version $v -RequireInstallers
       - uses: softprops/action-gh-release@v2
         with:
           files: |

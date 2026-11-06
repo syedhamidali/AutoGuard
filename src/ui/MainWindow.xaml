@@ -109,6 +109,8 @@
                         </StackPanel>
                         <TextBlock Text="Windows events (last 7 days): crashes, hardware errors, driver and disk errors, unexpected shutdowns" Style="{StaticResource Dim}"/>
                         <DataGrid x:Name="EventGrid" Height="360"/>
+                        <TextBlock Text="Drive health" Style="{StaticResource Dim}"/>
+                        <DataGrid x:Name="DiskGrid" Height="120"/>
                         <TextBlock Text="Guardian's own log" Style="{StaticResource Dim}"/>
                         <DataGrid x:Name="OwnLog" Height="200"/>
                     </StackPanel>
@@ -151,3 +153,4 @@
         </Grid>
     </Grid>
 </Window>
+

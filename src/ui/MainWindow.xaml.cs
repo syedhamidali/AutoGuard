@@ -69,7 +69,10 @@ public partial class MainWindow : Window
             case "Dashboard":
                 HealthText.Text = st.Health;
                 HealthText.Foreground = st.Health switch { "Good" => Brushes.LightGreen, "Watch" => Brushes.Khaki, "Needs attention" => Brushes.Orange, _ => Brushes.OrangeRed };
-                HealthDetail.Text = st.Findings.Count == 0 ? "No concerning readings right now." : string.Join("\n", st.Findings.Take(3).Select(f => "• " + f.Title));
+                var recentBad = st.Events.Count(e => e.Time > DateTime.Now.AddHours(-24) && e.Category is "UnexpectedShutdown" or "WHEA" or "Disk");
+                HealthDetail.Text = st.Findings.Count > 0 ? string.Join("\n", st.Findings.Take(3).Select(f => "• " + f.Title))
+                    : recentBad > 0 ? $"Temperatures look fine, but Windows logged {recentBad} unexpected shutdown / hardware / disk event(s) in the last 24 hours. See System Health."
+                    : "No concerning readings right now.";
                 TCpuT.Text = T(s.CpuTemp, " °C"); TGpuT.Text = T(s.GpuTemp, " °C"); TMoboT.Text = T(s.MoboTemp, " °C");
                 TCpuL.Text = T(s.CpuLoad ?? u.CpuPercent, " %"); TRam.Text = T(u.RamPercent, " %"); TGpuL.Text = T(s.GpuLoad, " %");
                 TFans.Text = s.Fans.Count == 0 ? "Not available" : string.Join("\n", s.Fans.Take(4).Select(f => $"{f.Name}: {f.Value:0} RPM"));
@@ -99,6 +102,7 @@ public partial class MainWindow : Window
                     ? $"The previous Guardian session (started {un.Start:g}) did not end cleanly. The last recorded sample was {(un.LastSample?.ToString("g") ?? "none")}. The PC most likely froze or lost power then. Data before that point is in the report."
                     : "The previous session ended normally.";
                 EventGrid.ItemsSource = st.Events.Select(e => new { Time = e.Time.ToString("g"), e.Category, e.Source, e.EventId, e.Summary }).ToList();
+                DiskGrid.ItemsSource = AutoPortal.Guardian.Windows.Diagnostics.DiskHealth.Read().Select(d => new { d.Name, Type = d.MediaType, d.Health, Status = d.Operational, Size_GB = d.SizeGb, SMART_predicts_failure = d.SmartPredictsFailure is bool b ? (b ? "YES" : "No") : "Not available (needs administrator)" }).ToList();
                 OwnLog.ItemsSource = _engine.Store.Events(100).Select(e => new { Time = e.Time.ToString("g"), e.Kind, e.Message }).ToList();
                 break;
             case "Recommendations":
@@ -121,12 +125,13 @@ public partial class MainWindow : Window
     {
         SetStartup.IsChecked = StartupTask.IsInstalled(); SetDelay.Text = _s.StartupDelaySeconds.ToString(); SetInterval.Text = _s.IntervalSeconds.ToString();
         SetNotify.IsChecked = _s.NotificationsEnabled; SetRecovery.IsChecked = _s.AutoRecovery; SetRetention.Text = _s.RetentionDays.ToString();
-        (CpuE.Text, CpuH.Text, CpuC.Text) = (_s.CpuLimits.Elevated.ToString(), _s.CpuLimits.High.ToString(), _s.CpuLimits.Critical.ToString());
-        (GpuE.Text, GpuH.Text, GpuC.Text) = (_s.GpuLimits.Elevated.ToString(), _s.GpuLimits.High.ToString(), _s.GpuLimits.Critical.ToString());
-        (MbE.Text, MbH.Text, MbC.Text) = (_s.MoboLimits.Elevated.ToString(), _s.MoboLimits.High.ToString(), _s.MoboLimits.Critical.ToString());
+        (CpuE.Text, CpuH.Text, CpuC.Text) = (F(_s.CpuLimits.Elevated), F(_s.CpuLimits.High), F(_s.CpuLimits.Critical));
+        (GpuE.Text, GpuH.Text, GpuC.Text) = (F(_s.GpuLimits.Elevated), F(_s.GpuLimits.High), F(_s.GpuLimits.Critical));
+        (MbE.Text, MbH.Text, MbC.Text) = (F(_s.MoboLimits.Elevated), F(_s.MoboLimits.High), F(_s.MoboLimits.Critical));
     }
 
-    static ThermalLimits Limits(string e, string h, string c) => new(double.Parse(e), double.Parse(h), double.Parse(c));
+    static string F(double d) => d.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    static ThermalLimits Limits(string e, string h, string c) => new(double.Parse(e, System.Globalization.CultureInfo.InvariantCulture), double.Parse(h, System.Globalization.CultureInfo.InvariantCulture), double.Parse(c, System.Globalization.CultureInfo.InvariantCulture));
 
     void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
@@ -135,8 +140,8 @@ public partial class MainWindow : Window
             var cpu = Limits(CpuE.Text, CpuH.Text, CpuC.Text); var gpu = Limits(GpuE.Text, GpuH.Text, GpuC.Text); var mb = Limits(MbE.Text, MbH.Text, MbC.Text);
             foreach (var l in new[] { cpu, gpu, mb }) if (!(l.Elevated < l.High && l.High < l.Critical)) throw new FormatException("Thresholds must increase: Elevated < High < Critical.");
             _s.CpuLimits = cpu; _s.GpuLimits = gpu; _s.MoboLimits = mb;
-            _s.StartupDelaySeconds = Math.Clamp(int.Parse(SetDelay.Text), 0, 600); _s.IntervalSeconds = Math.Clamp(int.Parse(SetInterval.Text), 1, 60);
-            _s.RetentionDays = Math.Clamp(int.Parse(SetRetention.Text), 1, 365);
+            _s.StartupDelaySeconds = Math.Clamp(int.Parse(SetDelay.Text, System.Globalization.CultureInfo.InvariantCulture), 0, 600); _s.IntervalSeconds = Math.Clamp(int.Parse(SetInterval.Text, System.Globalization.CultureInfo.InvariantCulture), 1, 60);
+            _s.RetentionDays = Math.Clamp(int.Parse(SetRetention.Text, System.Globalization.CultureInfo.InvariantCulture), 1, 365);
             _s.NotificationsEnabled = SetNotify.IsChecked == true; _s.AutoRecovery = SetRecovery.IsChecked == true;
             _s.StartWithWindows = SetStartup.IsChecked == true;
             _s.Save();
@@ -170,4 +175,5 @@ public partial class MainWindow : Window
         if (dlg.ShowDialog() == true) { File.WriteAllText(dlg.FileName, _engine.BuildReport()); MessageBox.Show("Report saved. It stays on this PC unless you share it.", "Report"); }
     }
 }
+
 

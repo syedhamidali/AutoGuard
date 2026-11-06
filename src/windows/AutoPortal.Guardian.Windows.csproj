@@ -3,6 +3,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Win32.SystemEvents" Version="8.0.0" />
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.1" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
     <ProjectReference Include="..\core\AutoPortal.Guardian.Core.csproj" />
     <ProjectReference Include="..\analysis\AutoPortal.Guardian.Analysis.csproj" />
   </ItemGroup>

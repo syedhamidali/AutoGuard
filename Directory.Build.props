@@ -6,7 +6,7 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>AutoPortal contributors</Authors>
     <Company>AutoPortal</Company>
     <Product>AutoPortal System Guardian</Product>

@@ -1,0 +1,121 @@
+using System.Net;
+using System.Text;
+using AutoPortal.Connectivity.Core;
+using Xunit;
+
+namespace AutoPortal.Guardian.Tests;
+
+/// <summary>A fake FortiGate-style portal served over loopback HTTP; no real network or credentials involved.</summary>
+sealed class FakePortal : IDisposable
+{
+    readonly HttpListener _l = new();
+    public int Port { get; }
+    public string? PostedBody; public volatile bool LoggedIn;
+    public string FormHtml = "<html><body><form action=\"/\" method=\"post\"><input type=\"hidden\" name=\"magic\" value=\"abc123\"><input type=\"hidden\" name=\"4Tredir\" value=\"/x?a=1&amp;b=2\"><input type=\"text\" name=\"username\"><input type=\"password\" name=\"password\"><input type=\"submit\"></form></body></html>";
+
+    public FakePortal()
+    {
+        Port = new Random().Next(20000, 40000);
+        _l.Prefixes.Add($"http://127.0.0.1:{Port}/"); _l.Start();
+        _ = Task.Run(async () =>
+        {
+            while (_l.IsListening)
+            {
+                HttpListenerContext c; try { c = await _l.GetContextAsync(); } catch { break; }
+                var path = c.Request.Url!.AbsolutePath;
+                if (c.Request.HttpMethod == "POST") { using var r = new StreamReader(c.Request.InputStream); PostedBody = r.ReadToEnd(); LoggedIn = PostedBody.Contains("password=secret%21"); Write(c, "ok"); }
+                else if (path == "/connecttest.txt") { if (LoggedIn) Write(c, "Microsoft Connect Test"); else { c.Response.StatusCode = 302; c.Response.RedirectLocation = $"http://127.0.0.1:{Port}/login"; c.Response.Close(); } }
+                else Write(c, FormHtml);
+            }
+        });
+    }
+    static void Write(HttpListenerContext c, string s) { var b = Encoding.UTF8.GetBytes(s); c.Response.OutputStream.Write(b); c.Response.Close(); }
+    public void Dispose() => _l.Close();
+}
+
+public class ConnectivityTests
+{
+    static ConnectivitySettings Cfg(FakePortal p) => new() { PortalHost = "127.0.0.1", AllowHttpPortal = true, ProbeUrl = $"http://127.0.0.1:{p.Port}/connecttest.txt", AutoLoginEnabled = true, MaxConsecutiveFailures = 2 };
+
+    [Fact]
+    public async Task DetectsPortalViaRedirect()
+    {
+        using var p = new FakePortal();
+        var r = await new CaptivePortalDetector(Cfg(p).ProbeUrl, "Microsoft Connect Test").ProbeAsync();
+        Assert.Equal(NetState.PortalDetected, r.State); Assert.Contains("/login", r.PortalUrl!.ToString());
+    }
+
+    [Fact]
+    public async Task UnreachableMeansOffline() =>
+        Assert.Equal(NetState.Offline, (await new CaptivePortalDetector("http://127.0.0.1:1/x", "x").ProbeAsync()).State);
+
+    [Fact]
+    public void ParsesFortiGateStyleForm()
+    {
+        using var p = new FakePortal();
+        var f = PortalLoginClient.ParseForm(p.FormHtml, new Uri("http://127.0.0.1/login"))!;
+        Assert.Equal("http://127.0.0.1/", f.Action.ToString());
+        Assert.Contains(f.Fields, x => x.Name == "magic" && x.Value == "abc123");
+        Assert.Contains(f.Fields, x => x.Name == "4Tredir" && x.Value == "/x?a=1&b=2");
+    }
+
+    [Fact]
+    public async Task FullFlowLogsInAndInternetBecomesReachable()
+    {
+        using var p = new FakePortal(); var s = Cfg(p); var store = new InMemoryCredentialStore(); store.Save("alice", "secret!");
+        using var m = new ConnectivityMonitor(s, store);
+        await m.CheckOnceAsync();
+        Assert.Equal(NetState.Online, m.State);
+        Assert.Contains("username=alice", p.PostedBody); Assert.Contains("magic=abc123", p.PostedBody);
+    }
+
+    [Fact]
+    public async Task NeverSendsCredentialsToOtherHosts()
+    {
+        using var p = new FakePortal(); var s = Cfg(p); s.PortalHost = "portal.example.com";
+        var r = await new PortalLoginClient(s).LoginAsync(new Uri($"http://127.0.0.1:{p.Port}/login"), "alice", "secret!");
+        Assert.False(r.Submitted); Assert.Null(p.PostedBody);
+    }
+
+    [Fact]
+    public async Task RefusesPlainHttpUnlessAllowed()
+    {
+        using var p = new FakePortal(); var s = Cfg(p); s.AllowHttpPortal = false;
+        Assert.False((await new PortalLoginClient(s).LoginAsync(new Uri($"http://127.0.0.1:{p.Port}/login"), "a", "b")).Submitted);
+    }
+
+    [Fact]
+    public async Task StopsAfterRepeatedFailuresToProtectAccount()
+    {
+        using var p = new FakePortal(); var s = Cfg(p); var store = new InMemoryCredentialStore(); store.Save("alice", "WRONG");
+        using var m = new ConnectivityMonitor(s, store);
+        await m.CheckOnceAsync(); await m.CheckOnceAsync();
+        Assert.Contains("Paused", m.LastMessage);
+        p.PostedBody = null; await m.CheckOnceAsync();
+        Assert.Null(p.PostedBody); // no further attempts while paused
+    }
+
+    [Fact]
+    public async Task FormWithoutPasswordFieldIsNotSubmitted()
+    {
+        using var p = new FakePortal { FormHtml = "<form action='/'><input type='checkbox' name='accept'></form>" };
+        var r = await new PortalLoginClient(Cfg(p)).LoginAsync(new Uri($"http://127.0.0.1:{p.Port}/login"), "a", "b");
+        Assert.False(r.Submitted);
+    }
+
+    [Fact]
+    public void SettingsFileNeverContainsPassword()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "apc-" + Guid.NewGuid() + ".json");
+        try { new ConnectivitySettings { Username = "alice" }.Save(path); Assert.DoesNotContain("assword", File.ReadAllText(path)); }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void WindowsCredentialStoreRoundTrip()
+    {
+        var store = new WindowsCredentialStore(); var prior = store.Load();
+        try { store.Save("tester", "pä$$ w0rd"); Assert.Equal(("tester", "pä$$ w0rd"), store.Load()); }
+        finally { if (prior is { } p) store.Save(p.User, p.Password); else store.Clear(); }
+    }
+}

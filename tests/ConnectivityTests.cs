@@ -33,6 +33,11 @@ sealed class FakePortal : IDisposable
     public void Dispose() => _l.Close();
 }
 
+sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> f) : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) => Task.FromResult(f(r));
+}
+
 public class ConnectivityTests
 {
     static ConnectivitySettings Cfg(FakePortal p) => new() { PortalHost = "127.0.0.1", AllowHttpPortal = true, ProbeUrl = $"http://127.0.0.1:{p.Port}/connecttest.txt", AutoLoginEnabled = true, MaxConsecutiveFailures = 2 };
@@ -43,6 +48,36 @@ public class ConnectivityTests
         using var p = new FakePortal();
         var r = await new CaptivePortalDetector(Cfg(p).ProbeUrl, "Microsoft Connect Test").ProbeAsync();
         Assert.Equal(NetState.PortalDetected, r.State); Assert.Contains("/login", r.PortalUrl!.ToString());
+    }
+
+    [Theory]
+    [InlineData("<meta http-equiv=\"refresh\" content=\"0; url=http://10.1.2.2:1000/fgtauth?23b173b9993a093b\">", "http://10.1.2.2:1000/fgtauth?23b173b9993a093b")]
+    [InlineData("<script>window.location=\"http://10.1.2.2:1000/fgtauth?abc\";</script>", "http://10.1.2.2:1000/fgtauth?abc")]
+    [InlineData("<a href='http://10.1.2.2:1000/fgtauth?x=1&amp;y=2'>Login</a>", "http://10.1.2.2:1000/fgtauth?x=1&y=2")]
+    public void ExtractsPortalAddressFromInterceptPage(string body, string expected) =>
+        Assert.Equal(expected, CaptivePortalDetector.ExtractRedirect(body)!.ToString());
+
+    [Fact]
+    public void NoAddressInPageMeansNull() => Assert.Null(CaptivePortalDetector.ExtractRedirect("<html>Welcome to the hotel network</html>"));
+
+    [Fact]
+    public async Task InterceptPageWithoutAddressSendsNothing()
+    {
+        using var p = new FakePortal(); var s = Cfg(p); var store = new InMemoryCredentialStore(); store.Save("alice", "secret!");
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("<html>please sign in</html>") });
+        using var m = new ConnectivityMonitor(s, store, new CaptivePortalDetector(s.ProbeUrl, s.ProbeExpected, handler));
+        await m.CheckOnceAsync();
+        Assert.Null(p.PostedBody); Assert.Contains("could not be determined", m.LastMessage);
+    }
+
+    [Fact]
+    public async Task PortalOnNonStandardPortOverPlainHttpWorksWhenAllowed()
+    {
+        // mirrors a FortiGate at http://<ip>:1000/fgtauth?<magic>: same host, odd port, plain HTTP, opt-in
+        using var p = new FakePortal(); var s = Cfg(p); s.AllowHttpPortal = true;
+        Assert.True(new PortalLoginClient(s).IsAllowedTarget(new Uri($"http://127.0.0.1:{p.Port}/fgtauth?23b173b9993a093b")));
+        s.AllowHttpPortal = false;
+        Assert.False(new PortalLoginClient(s).IsAllowedTarget(new Uri($"http://127.0.0.1:{p.Port}/fgtauth?23b173b9993a093b")));
     }
 
     [Fact]

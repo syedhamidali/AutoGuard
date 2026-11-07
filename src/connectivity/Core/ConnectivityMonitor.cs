@@ -46,7 +46,8 @@ public sealed class ConnectivityMonitor : IDisposable
         var c = _creds.Load();
         if (c is null || string.IsNullOrEmpty(c.Value.User)) { Set(NetState.PortalDetected, "No saved credentials."); return; }
 
-        var res = await _login.LoginAsync(r.PortalUrl ?? new Uri($"https://{_s.PortalHost}/"), c.Value.User, c.Value.Password, ct);
+        if (r.PortalUrl is null) { Set(NetState.PortalDetected, "A login page was detected but its address could not be determined, so nothing was sent."); return; }
+        var res = await _login.LoginAsync(r.PortalUrl, c.Value.User, c.Value.Password, ct);
         var after = await _detector.ProbeAsync(ct);
         if (after.State == NetState.Online) { _failures = 0; Set(NetState.Online, "Logged in to the portal. " + res.Message); return; }
         _failures++;

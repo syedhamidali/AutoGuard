@@ -1,5 +1,8 @@
 ﻿# Changelog
 
+## Unreleased
+- Connectivity Manager: fix "Start with Windows" failing silently with "Access is denied" for non-admin users (the startup task is now created from XML for the current user, and any error is shown). Added tests, including one that creates and removes a real task.
+
 ## 0.1.2
 - Connectivity Manager: support portals on plain HTTP and non-standard ports (e.g. FortiGate at http://10.1.2.2:1000/fgtauth?<magic>) via an explicit opt-in switch; detect portals that redirect from the page body; never send credentials if the portal address can't be determined.
 
@@ -16,5 +19,6 @@
 - Windows Event Log stability reader; handle-leak and socket-exhaustion watch.
 - Task Scheduler startup, tray app, sleep/wake resume, crash-restart.
 - WPF dashboard (7 pages), demo mode (`--demo`).
+
 
 

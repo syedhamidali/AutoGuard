@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using AutoPortal.Connectivity.Core;
 
 namespace AutoPortal.Connectivity.App;
@@ -19,7 +19,7 @@ static class Program
         var monitor = new ConnectivityMonitor(settings, creds);
         var tray = new NotifyIcon { Icon = SystemIcons.Information, Text = "AutoPortal Connectivity Manager", Visible = true };
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Settings…", null, (_, _) => new SettingsForm(settings, creds, monitor, TaskName).ShowDialog());
+        menu.Items.Add("Settingsâ€¦", null, (_, _) => new SettingsForm(settings, creds, monitor, TaskName).ShowDialog());
         menu.Items.Add("Check now", null, async (_, _) => { try { await monitor.CheckOnceAsync(); } catch { } });
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => Application.Exit());
@@ -45,7 +45,7 @@ sealed class SettingsForm : Form
     readonly TextBox host = new() { Width = 260 }, user = new() { Width = 260 }, pass = new() { Width = 260, UseSystemPasswordChar = true };
     readonly CheckBox enable = new() { Text = "Log in automatically when a login page appears", AutoSize = true };
     readonly CheckBox trust = new() { Text = "Trust this portal's certificate (needed for self-signed FortiGate certificates)", AutoSize = true };
-    readonly CheckBox allowHttp = new() { Text = "Portal uses plain HTTP, e.g. http://10.1.2.2:1000/… (password is sent unencrypted on your local network)", AutoSize = true, MaximumSize = new Size(440, 0) };
+    readonly CheckBox allowHttp = new() { Text = "Portal uses plain HTTP, e.g. http://10.1.2.2:1000/â€¦ (password is sent unencrypted on your local network)", AutoSize = true, MaximumSize = new Size(440, 0) };
     readonly CheckBox startup = new() { Text = "Start with Windows", AutoSize = true };
     readonly Label status = new() { AutoSize = true, MaximumSize = new Size(440, 0) };
 
@@ -77,19 +77,12 @@ sealed class SettingsForm : Form
         if (!string.IsNullOrEmpty(pass.Text)) _c.Save(_s.Username, pass.Text);
         else if (_c.Load() is { } old && old.User != _s.Username) _c.Save(_s.Username, old.Password);
         _s.Save();
-        var ok = SetTask(startup.Checked);
-        status.Text = ok ? "Saved." : "Saved, but the startup task could not be changed.";
+        var (ok, msg) = SetTask(startup.Checked);
+        status.Text = ok ? "Saved." : "Saved, but \"Start with Windows\" could not be changed: " + msg;
     }
 
-    bool IsTaskInstalled() => Run("/Query /TN \"" + _task + "\"") == 0;
-    bool SetTask(bool on)
-    {
-        if (!on) return !IsTaskInstalled() || Run("/Delete /TN \"" + _task + "\" /F") == 0;
-        return Run($"/Create /TN \"{_task}\" /TR \"\\\"{Environment.ProcessPath}\\\" --tray\" /SC ONLOGON /DELAY 0000:30 /RL LIMITED /F") == 0;
-    }
-    static int Run(string args)
-    {
-        using var p = Process.Start(new ProcessStartInfo("schtasks.exe", args) { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true })!;
-        p.StandardOutput.ReadToEnd(); p.StandardError.ReadToEnd(); p.WaitForExit(); return p.ExitCode;
-    }
+    bool IsTaskInstalled() => StartupTask.IsInstalled(_task);
+    (bool ok, string message) SetTask(bool on) =>
+        on ? StartupTask.Install(_task, Environment.ProcessPath!, 30) : StartupTask.Uninstall(_task);
 }
+

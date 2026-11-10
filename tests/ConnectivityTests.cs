@@ -139,6 +139,44 @@ public class ConnectivityTests
     }
 
     [Fact]
+    public void StartupTaskXmlIsValidLogonTaskForTheCurrentUserWithoutAdmin()
+    {
+        var xml = StartupTask.BuildXml(@"C:\Program Files\X\a.exe", "S-1-5-21-1", 30);
+        var doc = System.Xml.Linq.XDocument.Parse(xml);
+        Assert.NotNull(doc.Root);
+        Assert.Contains("<LogonTrigger>", xml); Assert.Contains("PT30S", xml);
+        Assert.Contains("LeastPrivilege", xml);          // never needs elevation to start
+        Assert.Contains("S-1-5-21-1", xml);              // user-specific trigger (works for non-admin creation)
+        Assert.Contains("--tray", xml); Assert.Contains("RestartOnFailure", xml);
+    }
+
+    [Fact]
+    public void StartupTaskCanBeCreatedAndRemovedByANormalUser()
+    {
+        // Regression test: `schtasks /SC ONLOGON` failed with "Access is denied" for non-admins; the XML route must work.
+        var name = "apc-test-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var (ok, msg) = StartupTask.Install(name, Environment.ProcessPath!, 5);
+            Assert.True(ok, "Install failed: " + msg);
+            Assert.True(StartupTask.IsInstalled(name));
+        }
+        finally { StartupTask.Uninstall(name); }          // removes only this test's own temporary task
+        Assert.False(StartupTask.IsInstalled(name));
+    }
+
+    [Fact]
+    public void AppNeverUsesTheAdminOnlyCommandLineLogonTask()
+    {
+        foreach (var f in new[] { "src/connectivity/App/Program.cs", "src/connectivity/Core/StartupTask.cs" })
+        {
+            // ignore comments: the explanation of why this is forbidden is allowed to mention it
+            var code = string.Join("\n", Repo.Read(f).Split('\n').Where(l => !l.TrimStart().StartsWith("//")));
+            Assert.DoesNotContain("/sc onlogon", code.ToLowerInvariant());
+        }
+    }
+
+    [Fact]
     public void SettingsFileNeverContainsPassword()
     {
         var path = Path.Combine(Path.GetTempPath(), "apc-" + Guid.NewGuid() + ".json");

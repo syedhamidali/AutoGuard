@@ -6,7 +6,7 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <Version>0.1.2</Version>
+    <Version>0.1.3</Version>
     <Authors>AutoPortal contributors</Authors>
     <Company>AutoPortal</Company>
     <Product>AutoPortal System Guardian</Product>
@@ -14,5 +14,6 @@
     <RepositoryUrl>https://github.com/syedhamidali/AutoGuard</RepositoryUrl>
   </PropertyGroup>
 </Project>
+
 
 

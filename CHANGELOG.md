@@ -1,6 +1,6 @@
 ﻿# Changelog
 
-## Unreleased
+## 0.1.4
 - Connectivity Manager: support portals that show the login form directly in the intercept page (HTTP 200, no redirect). Add a local diagnostic log (connectivity.log) of what the portal sent and what the app did, never credentials, with form values masked and a size cap.
 
 ## 0.1.3
@@ -22,6 +22,7 @@
 - Windows Event Log stability reader; handle-leak and socket-exhaustion watch.
 - Task Scheduler startup, tray app, sleep/wake resume, crash-restart.
 - WPF dashboard (7 pages), demo mode (`--demo`).
+
 
 
 

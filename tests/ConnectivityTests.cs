@@ -11,7 +11,9 @@ sealed class FakePortal : IDisposable
     readonly HttpListener _l = new();
     public int Port { get; }
     public string? PostedBody; public volatile bool LoggedIn;
-    public string FormHtml = "<html><body><form action=\"/\" method=\"post\"><input type=\"hidden\" name=\"magic\" value=\"abc123\"><input type=\"hidden\" name=\"4Tredir\" value=\"/x?a=1&amp;b=2\"><input type=\"text\" name=\"username\"><input type=\"password\" name=\"password\"><input type=\"submit\"></form></body></html>";
+    /// <summary>When true, the test URL answers HTTP 200 with the login form inline (no redirect), like an intercepting portal.</summary>
+    public bool InlineIntercept;
+    public string FormHtml ="<html><body><form action=\"/\" method=\"post\"><input type=\"hidden\" name=\"magic\" value=\"abc123\"><input type=\"hidden\" name=\"4Tredir\" value=\"/x?a=1&amp;b=2\"><input type=\"text\" name=\"username\"><input type=\"password\" name=\"password\"><input type=\"submit\"></form></body></html>";
 
     public FakePortal()
     {
@@ -24,7 +26,7 @@ sealed class FakePortal : IDisposable
                 HttpListenerContext c; try { c = await _l.GetContextAsync(); } catch { break; }
                 var path = c.Request.Url!.AbsolutePath;
                 if (c.Request.HttpMethod == "POST") { using var r = new StreamReader(c.Request.InputStream); PostedBody = r.ReadToEnd(); LoggedIn = PostedBody.Contains("password=secret%21"); Write(c, "ok"); }
-                else if (path == "/connecttest.txt") { if (LoggedIn) Write(c, "Microsoft Connect Test"); else { c.Response.StatusCode = 302; c.Response.RedirectLocation = $"http://127.0.0.1:{Port}/login"; c.Response.Close(); } }
+                else if (path == "/connecttest.txt") { if (LoggedIn) Write(c, "Microsoft Connect Test"); else if (InlineIntercept) Write(c, FormHtml.Replace("action=\"/\"", $"action=\"http://127.0.0.1:{Port}/\"")); else { c.Response.StatusCode = 302; c.Response.RedirectLocation = $"http://127.0.0.1:{Port}/login"; c.Response.Close(); } }
                 else Write(c, FormHtml);
             }
         });
@@ -78,6 +80,60 @@ public class ConnectivityTests
         Assert.True(new PortalLoginClient(s).IsAllowedTarget(new Uri($"http://127.0.0.1:{p.Port}/fgtauth?23b173b9993a093b")));
         s.AllowHttpPortal = false;
         Assert.False(new PortalLoginClient(s).IsAllowedTarget(new Uri($"http://127.0.0.1:{p.Port}/fgtauth?23b173b9993a093b")));
+    }
+
+    [Fact]
+    public async Task LogsInWhenThePortalPutsTheFormDirectlyInTheInterceptPage()
+    {
+        // the situation the user hit: HTTP 200 on the test URL, no redirect, login form in the body
+        using var p = new FakePortal { InlineIntercept = true }; var s = Cfg(p); var store = new InMemoryCredentialStore(); store.Save("alice", "secret!");
+        var log = Path.Combine(Path.GetTempPath(), "apc-log-" + Guid.NewGuid() + ".log"); DiagnosticLog.PathOverride = log;
+        try
+        {
+            using var m = new ConnectivityMonitor(s, store);
+            await m.CheckOnceAsync();
+            Assert.Equal(NetState.Online, m.State);
+            Assert.Contains("username=alice", p.PostedBody); Assert.Contains("magic=abc123", p.PostedBody);
+        }
+        finally { DiagnosticLog.PathOverride = null; File.Delete(log); }
+    }
+
+    [Fact]
+    public async Task InlineFormPostingToAnotherHostIsRefused()
+    {
+        using var p = new FakePortal { InlineIntercept = true }; var s = Cfg(p); s.PortalHost = "portal.example.com";
+        var r = await new PortalLoginClient(s).LoginWithPageAsync(p.FormHtml.Replace("action=\"/\"", "action=\"http://evil.example.net/steal\""), "alice", "secret!");
+        Assert.False(r.Submitted); Assert.Null(p.PostedBody);
+    }
+
+    [Fact]
+    public async Task DiagnosticLogRecordsWhatThePortalSentButNeverTheCredentials()
+    {
+        using var p = new FakePortal { InlineIntercept = true }; var s = Cfg(p); var store = new InMemoryCredentialStore(); store.Save("alice", "secret!");
+        var log = Path.Combine(Path.GetTempPath(), "apc-log-" + Guid.NewGuid() + ".log"); DiagnosticLog.PathOverride = log;
+        try
+        {
+            using var m = new ConnectivityMonitor(s, store);
+            await m.CheckOnceAsync();
+            var text = File.ReadAllText(log);
+            Assert.Contains("PORTAL probe: HTTP 200", text); Assert.Contains("LOGIN attempt", text);
+            Assert.DoesNotContain("secret!", text); Assert.DoesNotContain("secret%21", text);
+            Assert.DoesNotContain("abc123", text);      // hidden-field values (e.g. the one-time magic token) are masked
+        }
+        finally { DiagnosticLog.PathOverride = null; File.Delete(log); }
+    }
+
+    [Fact]
+    public void LogIsRotatedSoItCannotGrowWithoutLimit()
+    {
+        var log = Path.Combine(Path.GetTempPath(), "apc-rot-" + Guid.NewGuid() + ".log");
+        try
+        {
+            File.WriteAllText(log, new string('x', 210 * 1024));
+            DiagnosticLog.Write("new entry", log);
+            Assert.True(new FileInfo(log).Length < 1024); Assert.True(File.Exists(log + ".old"));
+        }
+        finally { File.Delete(log); File.Delete(log + ".old"); }
     }
 
     [Fact]

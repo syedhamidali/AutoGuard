@@ -44,6 +44,29 @@ public sealed class PortalLoginClient
             var finalUri = page.RequestMessage?.RequestUri ?? portalUrl;
             if (!IsAllowedTarget(finalUri)) return new(false, $"Refused: portal redirected to '{finalUri.Host}'. Credentials were not sent.");
             var html = await page.Content.ReadAsStringAsync(ct);
+            return await SubmitAsync(http, finalUri, html, user, password, ct);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        {
+            return new(false, "Login request failed: " + e.Message);
+        }
+    }
+
+    /// <summary>
+    /// For portals that put the login form directly in the intercept page (no redirect). The form's address is resolved
+    /// against the configured portal host and is refused unless it points at that host.
+    /// </summary>
+    public async Task<LoginResult> LoginWithPageAsync(string html, string user, string password, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_s.PortalHost)) return new(false, "No portal host configured.");
+        using var http = Make();
+        try { return await SubmitAsync(http, new Uri($"{(_s.AllowHttpPortal ? "http" : "https")}://{_s.PortalHost}/"), html, user, password, ct); }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { return new(false, "Login request failed: " + e.Message); }
+    }
+
+    async Task<LoginResult> SubmitAsync(HttpClient http, Uri finalUri, string html, string user, string password, CancellationToken ct)
+    {
+        {
             var form = ParseForm(html, finalUri);
             if (form is null) return new(false, "No login form found on the portal page.");
             if (!IsAllowedTarget(form.Action)) return new(false, $"Refused: form posts to '{form.Action.Host}'. Credentials were not sent.");
@@ -61,10 +84,6 @@ public sealed class PortalLoginClient
 
             using var resp = await http.PostAsync(form.Action, new FormUrlEncodedContent(fields), ct);
             return new(true, $"Submitted login form (HTTP {(int)resp.StatusCode}).");
-        }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
-        {
-            return new(false, "Login request failed: " + e.Message);
         }
     }
 

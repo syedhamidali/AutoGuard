@@ -1,5 +1,8 @@
 ﻿# Changelog
 
+## Unreleased
+- Connectivity Manager: support portals that show the login form directly in the intercept page (HTTP 200, no redirect). Add a local diagnostic log (connectivity.log) of what the portal sent and what the app did, never credentials, with form values masked and a size cap.
+
 ## 0.1.3
 - Connectivity Manager: fix "Start with Windows" failing silently with "Access is denied" for non-admin users (the startup task is now created from XML for the current user, and any error is shown). Added tests, including one that creates and removes a real task.
 
@@ -19,6 +22,7 @@
 - Windows Event Log stability reader; handle-leak and socket-exhaustion watch.
 - Task Scheduler startup, tray app, sleep/wake resume, crash-restart.
 - WPF dashboard (7 pages), demo mode (`--demo`).
+
 
 
 

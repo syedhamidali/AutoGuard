@@ -3,7 +3,8 @@ using System.Net;
 namespace AutoPortal.Connectivity.Core;
 
 public enum NetState { Online, PortalDetected, Offline }
-public sealed record ProbeResult(NetState State, Uri? PortalUrl, string Detail);
+/// <param name="Body">The intercept page when the portal answered 200 instead of redirecting (may itself contain the login form).</param>
+public sealed record ProbeResult(NetState State, Uri? PortalUrl, string Detail, string? Body = null, int? Status = null, string? ContentType = null);
 
 /// <summary>Detects a captive portal by requesting a known URL without following redirects.</summary>
 public sealed class CaptivePortalDetector
@@ -35,14 +36,16 @@ public sealed class CaptivePortalDetector
             {
                 var loc = r.Headers.Location;
                 if (loc != null && !loc.IsAbsoluteUri) loc = new Uri(new Uri(_probe), loc);
-                return new(NetState.PortalDetected, loc, "Redirected to " + loc);
+                return new(NetState.PortalDetected, loc, "Redirected to " + loc, null, (int)r.StatusCode, null);
             }
             var body = (await r.Content.ReadAsStringAsync(ct)).Trim();
             if (r.IsSuccessStatusCode && body.Contains(_expected, StringComparison.OrdinalIgnoreCase)) return new(NetState.Online, null, "Internet reachable");
             // 200 with different content: some portals intercept without an HTTP redirect and redirect from the page body
             // (meta refresh or JavaScript). Extract that address; never fall back to the probe URL, which is not the portal.
             var url = ExtractRedirect(body);
-            return new(NetState.PortalDetected, url, url is null ? "Unexpected response (possible portal), but its address could not be determined" : "Portal page redirects to " + url);
+            var contentType = r.Content.Headers.ContentType?.ToString();
+            return new(NetState.PortalDetected, url, url is null ? "Unexpected response (possible portal), but its address could not be determined" : "Portal page redirects to " + url,
+                body.Length > 65536 ? body[..65536] : body, (int)r.StatusCode, contentType);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or OperationCanceledException)
         {

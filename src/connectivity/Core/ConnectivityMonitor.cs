@@ -12,7 +12,7 @@ public sealed class ConnectivityMonitor : IDisposable
     readonly PortalLoginClient _login;
     readonly CancellationTokenSource _cts = new();
     int _failures;
-    DateTime _pausedUntil = DateTime.MinValue;
+    DateTime _pausedUntil = DateTime.MinValue, _lastDiag = DateTime.MinValue;
 
     public NetState State { get; private set; } = NetState.Offline;
     public string LastMessage { get; private set; } = "Starting…";
@@ -40,14 +40,24 @@ public sealed class ConnectivityMonitor : IDisposable
     {
         var r = await _detector.ProbeAsync(ct);
         if (r.State != NetState.PortalDetected) { if (r.State == NetState.Online) _failures = 0; Set(r.State, r.Detail); return; }
+        // Record exactly what the network sent (no credentials) so a failed login can be diagnosed afterwards.
+        if (DateTime.Now - _lastDiag > TimeSpan.FromMinutes(2))
+        {
+            _lastDiag = DateTime.Now;
+            DiagnosticLog.Write($"PORTAL probe: HTTP {r.Status?.ToString() ?? "?"} type={r.ContentType ?? "-"} portalUrl={r.PortalUrl?.ToString() ?? "(none)"} detail={r.Detail} body={DiagnosticLog.Snippet(r.Body)}");
+        }
         Set(NetState.PortalDetected, "Login portal detected.");
         if (!_s.AutoLoginEnabled) { Set(NetState.PortalDetected, "Login portal detected. Auto-login is off."); return; }
         if (DateTime.Now < _pausedUntil) { Set(NetState.PortalDetected, $"Paused until {_pausedUntil:t} after repeated failed logins."); return; }
         var c = _creds.Load();
         if (c is null || string.IsNullOrEmpty(c.Value.User)) { Set(NetState.PortalDetected, "No saved credentials."); return; }
 
-        if (r.PortalUrl is null) { Set(NetState.PortalDetected, "A login page was detected but its address could not be determined, so nothing was sent."); return; }
-        var res = await _login.LoginAsync(r.PortalUrl, c.Value.User, c.Value.Password, ct);
+        LoginResult res;
+        if (r.PortalUrl is not null) res = await _login.LoginAsync(r.PortalUrl, c.Value.User, c.Value.Password, ct);
+        else if (r.Body is not null && System.Text.RegularExpressions.Regex.IsMatch(r.Body, @"type\s*=\s*[""']?password", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            res = await _login.LoginWithPageAsync(r.Body, c.Value.User, c.Value.Password, ct);   // login form is in the intercept page itself
+        else { Set(NetState.PortalDetected, "A login page was detected but its address could not be determined, so nothing was sent. See connectivity.log."); return; }
+        DiagnosticLog.Write("LOGIN attempt: " + res.Message);
         var after = await _detector.ProbeAsync(ct);
         if (after.State == NetState.Online) { _failures = 0; Set(NetState.Online, "Logged in to the portal. " + res.Message); return; }
         _failures++;

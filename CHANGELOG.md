@@ -1,6 +1,6 @@
 ﻿# Changelog
 
-## Unreleased
+## 0.1.5
 - Guardian: freeze flight recorder. Every 5 s it appends one line (CPU, kernel/DPC/interrupt time, RAM, per-drive queue and latency, drive temperature, three busiest processes) to a log on a non-system drive, written by its own thread and flushed to disk, so it keeps recording if the system drive stalls. Local only, capped in size.
 - Docs corrected: CPU/motherboard sensors need the separate PawnIO driver (not WinRing0); administrator rights alone are not enough. Drive temperatures only need administrator rights.
 

@@ -9,7 +9,24 @@ public class BlackBoxTests
 {
     static string Tmp() => Path.Combine(Path.GetTempPath(), "apbb-" + Guid.NewGuid().ToString("N")[..8], BlackBoxRecorder.FileName);
 
-    static void WaitFor(Func<bool> cond, int ms = 5000) { var end = DateTime.Now.AddMilliseconds(ms); while (!cond() && DateTime.Now < end) Thread.Sleep(25); }
+    /// <summary>Reads the log while the recorder may still have it open for writing (File.ReadAllText would sometimes hit a sharing violation).</summary>
+    static string[] Lines(string path)
+    {
+        try
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var sr = new StreamReader(fs);
+            return sr.ReadToEnd().Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        }
+        catch (IOException) { return Array.Empty<string>(); }
+    }
+    static string Text(string path) => string.Join("\n", Lines(path));
+
+    static void WaitFor(Func<bool> cond, int ms = 5000)
+    {
+        var end = DateTime.Now.AddMilliseconds(ms);
+        while (DateTime.Now < end) { try { if (cond()) return; } catch (IOException) { } Thread.Sleep(25); }
+    }
 
     [Fact]
     public void LineNamesTheBusiestProcessesAndKernelTimeSoADriverSpinCanBeToldFromAnApp()
@@ -62,8 +79,8 @@ public class BlackBoxTests
         {
             using var r = new BlackBoxRecorder(path);
             r.Write("hello black box");
-            WaitFor(() => File.Exists(path) && File.ReadAllText(path).Contains("hello black box"));   // readable now, not only after Dispose
-            Assert.Contains("hello black box", File.ReadAllText(path));
+            WaitFor(() => File.Exists(path) && Text(path).Contains("hello black box"));   // readable now, not only after Dispose
+            Assert.Contains("hello black box", Text(path));
         }
         finally { try { Directory.Delete(Path.GetDirectoryName(path)!, true); } catch { } }
     }
@@ -76,9 +93,8 @@ public class BlackBoxTests
         {
             using var r = new BlackBoxRecorder(path, maxBytes: 2000);
             for (int i = 0; i < 100; i++) r.Write(new string('x', 100) + i);
-            WaitFor(() => File.Exists(path + ".old"));
+            WaitFor(() => File.Exists(path + ".old") && new FileInfo(path).Exists);
             Assert.True(File.Exists(path + ".old"));
-            WaitFor(() => new FileInfo(path).Exists);
             Assert.True(new FileInfo(path).Length < 4000);
         }
         finally { try { Directory.Delete(Path.GetDirectoryName(path)!, true); } catch { } }
@@ -110,8 +126,8 @@ public class BlackBoxTests
         var path = Tmp();
         try
         {
-            using (var r = new BlackBoxRecorder(path)) { r.Start(2); WaitFor(() => File.Exists(path) && File.ReadAllLines(path).Length >= 1, 15000); }
-            var first = File.ReadAllLines(path)[0];
+            using (var r = new BlackBoxRecorder(path)) { r.Start(2); WaitFor(() => File.Exists(path) && Lines(path).Length >= 1, 15000); }
+            var first = Lines(path)[0];
             Assert.Matches(@"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d cpu=", first);
             Assert.Contains("ram=", first); Assert.Contains("top=[", first);
         }

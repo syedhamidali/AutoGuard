@@ -6,6 +6,8 @@ namespace AutoPortal.Guardian.Windows.Performance;
 
 public sealed record SystemUsage(double? CpuPercent, double? RamPercent, double RamAvailableMb, double? DiskPercent, double? DiskResponseMs, TimeSpan Uptime);
 public sealed record ProcessUsage(int Pid, string Name, double CpuPercent, double RamMb, double DiskMbPerSec, int Handles, bool IsProtected);
+/// <summary>Where CPU time goes besides normal programs: high DPC / interrupt / privileged time points at a driver or hardware, not an app.</summary>
+public sealed record KernelBreakdown(double? Dpc, double? Interrupt, double? Privileged);
 
 /// <summary>Lightweight resource sampling. Failures yield null ("Not available"), never made-up numbers.</summary>
 public sealed class PerformanceMonitor : IDisposable
@@ -14,7 +16,7 @@ public sealed class PerformanceMonitor : IDisposable
     public static readonly HashSet<string> Protected = new(StringComparer.OrdinalIgnoreCase)
     { "System", "Idle", "smss", "csrss", "wininit", "services", "lsass", "winlogon", "svchost", "dwm", "explorer", "fontdrvhost", "Registry", "MsMpEng", "TrustedInstaller" };
 
-    PerformanceCounter? _cpu, _disk, _diskLat;
+    PerformanceCounter? _cpu, _disk, _diskLat, _dpc, _intr, _priv;
     readonly Dictionary<int, (TimeSpan cpu, ulong io, DateTime t)> _prev = new();
 
     public PerformanceMonitor()
@@ -22,8 +24,13 @@ public sealed class PerformanceMonitor : IDisposable
         _cpu = TryCounter("Processor", "% Processor Time", "_Total");
         _disk = TryCounter("PhysicalDisk", "% Disk Time", "_Total");
         _diskLat = TryCounter("PhysicalDisk", "Avg. Disk sec/Transfer", "_Total");
-        _cpu?.NextValue(); _disk?.NextValue(); _diskLat?.NextValue();
+        _dpc = TryCounter("Processor", "% DPC Time", "_Total");
+        _intr = TryCounter("Processor", "% Interrupt Time", "_Total");
+        _priv = TryCounter("Processor", "% Privileged Time", "_Total");
+        _cpu?.NextValue(); _disk?.NextValue(); _diskLat?.NextValue(); _dpc?.NextValue(); _intr?.NextValue(); _priv?.NextValue();
     }
+
+    public KernelBreakdown ReadKernel() => new(Next(_dpc), Next(_intr), Next(_priv));
 
     static PerformanceCounter? TryCounter(string cat, string name, string inst)
     {
@@ -85,5 +92,5 @@ public sealed class PerformanceMonitor : IDisposable
     public static int UdpEndpointCount() { try { return IPGlobalProperties.GetIPGlobalProperties().GetActiveUdpListeners().Length; } catch { return -1; } }
     public static int TcpConnectionCount() { try { return IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpConnections().Length; } catch { return -1; } }
 
-    public void Dispose() { _cpu?.Dispose(); _disk?.Dispose(); _diskLat?.Dispose(); }
+    public void Dispose() { _cpu?.Dispose(); _disk?.Dispose(); _diskLat?.Dispose(); _dpc?.Dispose(); _intr?.Dispose(); _priv?.Dispose(); }
 }

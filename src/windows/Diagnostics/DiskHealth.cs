@@ -2,6 +2,8 @@ using System.Management;
 
 namespace AutoPortal.Guardian.Windows.Diagnostics;
 
+public sealed record DiskTemp(string Name, double? TempC, double? MaxC);
+
 public sealed record DiskInfo(string Name, string MediaType, string Health, string Operational, bool? SmartPredictsFailure, double? SizeGb);
 
 /// <summary>Reads drive health from Windows Storage (and SMART failure prediction where the driver exposes it). Read-only.</summary>
@@ -37,6 +39,29 @@ public static class DiskHealth
         catch { /* needs administrator or driver support: leave as not available */ }
         // The WMI class is not keyed to the friendly name, so apply it to all disks only as a system-wide indicator.
         return predict is null ? list : list.Select(d => d with { SmartPredictsFailure = predict }).ToList();
+    }
+
+    /// <summary>Drive temperatures from Windows' storage reliability counters. Needs administrator rights; otherwise values are null ("Not available").</summary>
+    public static IReadOnlyList<DiskTemp> ReadTemperatures()
+    {
+        var list = new List<DiskTemp>();
+        try
+        {
+            var scope = new ManagementScope(@"\\.\root\Microsoft\Windows\Storage");
+            var names = new Dictionary<string, string>();
+            using (var s = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT DeviceId,FriendlyName FROM MSFT_PhysicalDisk")))
+                foreach (ManagementObject d in s.Get()) using (d) names[d["DeviceId"]?.ToString() ?? ""] = d["FriendlyName"]?.ToString() ?? "Disk";
+            using (var s = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT DeviceId,Temperature,TemperatureMax FROM MSFT_StorageReliabilityCounter")))
+                foreach (ManagementObject r in s.Get())
+                    using (r)
+                    {
+                        var id = r["DeviceId"]?.ToString() ?? "";
+                        double? t = N(r["Temperature"]) is int a && a > 0 ? a : null, m = N(r["TemperatureMax"]) is int b && b > 0 ? b : null;
+                        list.Add(new DiskTemp(names.TryGetValue(id, out var nm) ? nm : "Disk " + id, t, m));
+                    }
+        }
+        catch { /* not available: report nothing rather than guess */ }
+        return list;
     }
 
     static int? N(object? v) => v is null ? null : Convert.ToInt32(v, System.Globalization.CultureInfo.InvariantCulture);

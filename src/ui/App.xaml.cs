@@ -20,6 +20,7 @@ public partial class App : System.Windows.Application
     ISensorProvider? _sensors;
     MainWindow? _window;
     HistoryStore? _store;
+    AutoPortal.Guardian.Windows.Diagnostics.BlackBoxRecorder? _blackBox;
 
     sealed class EmptyProvider : ISensorProvider
     {
@@ -62,6 +63,20 @@ public partial class App : System.Windows.Application
         });
         _engine.Start();
 
+        // Flight recorder on its own thread and (when possible) its own drive, so it keeps working if C: stalls.
+        if (settings.BlackBoxEnabled && !demo)
+            Task.Run(() =>
+            {
+                try
+                {
+                    var path = string.IsNullOrWhiteSpace(settings.BlackBoxPath) ? AutoPortal.Guardian.Windows.Diagnostics.BlackBoxRecorder.PickPath() : settings.BlackBoxPath;
+                    _blackBox = new AutoPortal.Guardian.Windows.Diagnostics.BlackBoxRecorder(path);
+                    _blackBox.Start(5);
+                    _store?.LogEvent("BlackBox", "Flight recorder writing to " + path);
+                }
+                catch (Exception ex) { LogCrash(ex); }
+            });
+
         if (!e.Args.Contains("--tray")) _window.Show();
     }
 
@@ -87,7 +102,7 @@ public partial class App : System.Windows.Application
     {
         if (_down) return; _down = true;
         try { _tray!.Visible = false; _tray.Dispose(); } catch { }
-        try { _engine?.Dispose(); _recovery?.Dispose(); _sensors?.Dispose(); _store?.Dispose(); } catch { }
+        try { _blackBox?.Dispose(); _engine?.Dispose(); _recovery?.Dispose(); _sensors?.Dispose(); _store?.Dispose(); } catch { }
     }
 
     protected override void OnExit(ExitEventArgs e) { ShutdownCleanly(); _single?.Dispose(); base.OnExit(e); }

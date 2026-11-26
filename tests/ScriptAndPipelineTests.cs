@@ -255,6 +255,16 @@ public class RepoHygieneTests
     public void ThirdPartyNoticesCoverTheSensorLibrary() => Assert.Contains("LibreHardwareMonitor", Repo.Read("THIRD-PARTY-NOTICES.md"));
 
     [Fact]
+    public void DocsNameTheDriverTheSensorLibraryActuallyUses()
+    {
+        // LibreHardwareMonitorLib 0.9.x uses PawnIO (not WinRing0). The docs must not promise that administrator rights alone give CPU temperatures.
+        var notices = Repo.Read("THIRD-PARTY-NOTICES.md");
+        Assert.Contains("PawnIO", notices); Assert.DoesNotContain("WinRing0", notices);
+        Assert.Contains("PawnIO", Repo.Read("docs/TROUBLESHOOTING.md"));
+        Assert.Contains("PawnIO", Repo.Read("README.md"));
+    }
+
+    [Fact]
     public void ChangelogMentionsTheCurrentVersion()
     {
         var v = Regex.Match(Repo.Read("Directory.Build.props"), @"<Version>([^<]+)</Version>").Groups[1].Value;

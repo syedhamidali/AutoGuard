@@ -11,5 +11,8 @@ Check each license before redistributing builds.
 | System.Diagnostics.PerformanceCounter, Microsoft.Win32.SystemEvents | MIT | Microsoft .NET libraries. |
 | .NET 8 runtime | MIT | Bundled in self-contained builds. |
 
-LibreHardwareMonitorLib loads a signed kernel driver (WinRing0-based) to read CPU and motherboard
-sensors. That is why administrator rights are needed for full sensor access. See docs/SECURITY-MODEL.md.
+LibreHardwareMonitorLib 0.9.x reads CPU and motherboard sensors through the separate **PawnIO** kernel
+driver (https://pawnio.eu, not bundled with Guardian; it must be installed by the user). Without it, CPU and
+motherboard temperatures show "Not available" even when Guardian runs as administrator. Administrator rights are
+also needed for drive temperatures. PawnIO is a third-party component with its own license: check it before
+installing or redistributing it. See docs/SECURITY-MODEL.md.

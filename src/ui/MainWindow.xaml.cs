@@ -37,7 +37,7 @@ public partial class MainWindow : Window
         }
         SensorMode.Text = sensors.HasFullAccess ? $"Sensors: {sensors.Name}\nFull sensor access." : $"Sensors: {sensors.Name}\nLimited access. Run as administrator to read CPU/motherboard sensors and fans.";
         if (sensors.GetType() == typeof(DemoSensorProvider)) ShowBanner("DEMO DATA: these readings are simulated for UI development and are not from your hardware.");
-        else if (!sensors.HasFullAccess) ShowBanner("Running without administrator rights: many temperature and fan sensors will show \"Not available\". Use Settings → Restart as administrator for full access.");
+        else if (!sensors.HasFullAccess) ShowBanner("Running without administrator rights: drive temperatures will show \"Not available\", and CPU/motherboard temperatures also need the separate PawnIO driver (see Troubleshooting). Use Settings → Restart as administrator for drive temperatures.");
         CurveGrid.ItemsSource = FanCurve.Example.Points.Select(p => new { Temperature_C = p.TempC, Fan_Percent = p.Percent }).ToList();
         LoadSettings();
         engine.Updated += st => Dispatcher.BeginInvoke(() => { _state = st; if (IsVisible && WindowState != WindowState.Minimized) Refresh(st); });

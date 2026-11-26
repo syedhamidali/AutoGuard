@@ -7,7 +7,7 @@ namespace AutoPortal.Guardian.Hardware;
 /// <summary>
 /// Reads real sensors through LibreHardwareMonitorLib (MPL-2.0). Only sensors that actually report a value are returned;
 /// anything the hardware does not expose is simply absent and shown as "Not available" by the UI.
-/// Low-level CPU/motherboard sensors need a kernel driver, which requires administrator rights.
+/// Low-level CPU/motherboard sensors need administrator rights AND the separate PawnIO kernel driver (not bundled).
 /// </summary>
 public sealed class LhmSensorProvider : ISensorProvider
 {

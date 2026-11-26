@@ -31,7 +31,7 @@ It never disables thermal protection, never turns fans off, never overclocks/und
 1. Download `AutoPortal-System-Guardian-Setup-x.y.z.exe` and/or `AutoPortal-Connectivity-Manager-Setup-x.y.z.exe` (or the portable `.zip`s) from [Releases](../../releases).
 2. Verify the SHA-256 in `SHA256SUMS.txt`: `Get-FileHash .\<file>`.
 3. Run it. No Python, Git or .NET install is needed (self-contained).
-4. For full CPU/motherboard sensors, use **Settings â†’ Restart as administrator**. Without it, those sensors show "Not available".
+4. Drive temperatures need **Settings → Restart as administrator**. CPU/motherboard temperatures additionally need the separate [PawnIO](https://pawnio.eu) driver, which Guardian does not install. Without these, those sensors show "Not available".
 
 **Uninstall:** Settings â†’ Apps â†’ AutoPortal System Guardian â†’ Uninstall. The uninstaller removes the startup task. Your history in `%LOCALAPPDATA%\AutoPortal\SystemGuardian` is kept unless you delete it (Settings â†’ Delete diagnostic history).
 

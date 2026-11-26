@@ -1,6 +1,8 @@
 # Troubleshooting
 
-**CPU temperature shows "Not available".** Run Guardian as administrator (Settings → Restart as administrator). Some CPUs/boards still expose nothing; that is shown honestly.
+**CPU temperature shows "Not available".** Running as administrator is not enough: the sensor library reads CPU/motherboard sensors through the separate **PawnIO** driver (https://pawnio.eu), which must be installed first. Some CPUs/boards still expose nothing; that is shown honestly. Drive temperatures only need administrator rights.
+
+**How do I find out what caused a freeze?** Open `AutoPortal\BlackBox\guardian-blackbox.log` (on your non-system drive, e.g. `D:\`). Each line is one moment: `cpu`, `dpc`/`int`/`priv` (high values mean a driver or hardware, not a program), `disks=[… q=queue lat=latency]` (a growing queue or latency of seconds means a drive stalled) and `top=[…]` (the busiest programs). The last lines before the file stops are the last moments before the freeze.
 
 **No fans listed / no fan control.** Your board's fan controller may not be supported by the sensor library (common on OEM prebuilt PCs). Use the BIOS/UEFI fan settings.
 

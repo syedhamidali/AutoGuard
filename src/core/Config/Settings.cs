@@ -14,6 +14,10 @@ public sealed class GuardianSettings
     public int PersistEverySeconds { get; set; } = 5;
     public int RetentionDays { get; set; } = 14;
     public bool AutoRecovery { get; set; } = true;
+    /// <summary>Freeze flight-recorder (see BlackBoxRecorder). Local only; on by default because freezes leave no other trace.</summary>
+    public bool BlackBoxEnabled { get; set; } = true;
+    /// <summary>Empty = automatic (a non-system drive if available).</summary>
+    public string BlackBoxPath { get; set; } = "";
     public bool AllowNetworkAdapterReset { get; set; }   // off: every reset needs explicit approval
     public bool Telemetry { get; set; }                  // never sends data; shown for transparency
     public ThermalLimits CpuLimits { get; set; } = new(70, 80, 90);

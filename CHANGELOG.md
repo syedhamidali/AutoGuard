@@ -1,5 +1,9 @@
 ﻿# Changelog
 
+## Unreleased
+- Guardian: freeze flight recorder. Every 5 s it appends one line (CPU, kernel/DPC/interrupt time, RAM, per-drive queue and latency, drive temperature, three busiest processes) to a log on a non-system drive, written by its own thread and flushed to disk, so it keeps recording if the system drive stalls. Local only, capped in size.
+- Docs corrected: CPU/motherboard sensors need the separate PawnIO driver (not WinRing0); administrator rights alone are not enough. Drive temperatures only need administrator rights.
+
 ## 0.1.4
 - Connectivity Manager: support portals that show the login form directly in the intercept page (HTTP 200, no redirect). Add a local diagnostic log (connectivity.log) of what the portal sent and what the app did, never credentials, with form values masked and a size cap.
 
